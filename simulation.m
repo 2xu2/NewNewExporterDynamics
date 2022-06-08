@@ -7,38 +7,37 @@
 % We have 1914 plants and 400 periods
 % Note we have to annualize the results (taking average for each year)
 % E vary for each plant and Q is identical for all plants
+tic
+rng(2); % Set random seed
+result = zeros(3, 1); 
 Esim = [];
 for i = 1:plants
-    E = AR1sim(T, Estate_or, Eprob);
-    Esim = vertcat(Esim, exp(E)); % transform to ln process
+    E = AR1sim(T, Estate, Eprob);
+    Esim = [Esim; E];
 end
-Qsim = AR1sim(T, Qstate_or, Qprob);
-Qsim = exp(Qsim); % transform to ln process
+Qsim = AR1sim(T, Qstate, Qprob);
 
 % initialize policy function for firms
-policy = ones(plants, 1);
+policy_sim = zeros(plants, T);
 % initialize domestic and foreign sales
 domestic = zeros(plants, T);
-exports = zeros(plants, T);
+export = zeros(plants, T);
 
+% simulate export choice and domestic and foreign sales
 for i = 1:plants
     for j = 2:T
-        policy(i, j) = V((V(:, 1) == policy(i, j - 1)) & (V(:, 2) == Esim(i, j)) & ...
-            (V(:, 3) == Qsim(j)), 9);
-    end
-end
-
-
-% obtain domestic and foreign sales
-for i = 1:plants
-    for j = 1:T
-        [domestic(i, j),export(i, j)] = sales(policy(i, j), Qsim(j), Esim(i, j),...
+        policy_sim(i, j) = Policy((State(:, 1) == policy_sim(i, j - 1)) & (State(:, 2) == Esim(i, j)) & ...
+            (State(:, 3) == Qsim(j)));
+        [domestic(i, j),export(i, j)] = sales(policy_sim(i, j), Esim(i, j), Qsim(j), ...
              theta, Cstar, alphan, alphak, w, r);
     end
 end
 
+
+last = policy_sim(:,20); %Save the policy of the last removed period
+
 % Remove first 20 periods
-policy = policy(:,21:end);
+policy_sim = policy_sim(:,21:end);
 domestic = domestic(:,21:end);
 export = export(:,21:end);
 
@@ -63,42 +62,35 @@ end
 % mean variance of domestic sales (plant size)
 vardomestic = mean(var(domestic));
 
-
 % mean export-sales ratio
-meanexport = mean(exportsales(exportsales > 0));
-
-% save firm's last period decision
-last = policy(:,1);
+result(3) = mean(exportsales(exportsales > 0));
 
 % Now obtain starter and stopper ratio
-current = [];
-starterrate = [];
-stopperrate = [];
-for j = 2:(T - 20)
-    current = policy(:,j);
+starterrate = zeros(T-20, 1);
+stopperrate = zeros(T-20, 1);
+for j = 1:(T - 20)
+    current = policy_sim(:,j);
     starter = 0;
     stopper = 0;
     totalnonexporter = 0;
-    totalexporter = 0;
     for i = 1:plants
         if last(i) == 0
             totalnonexporter = totalnonexporter + 1;
             if current(i) == 1
                 starter = starter + 1;
             end
-        elseif last(i) == 1
-            totalexporter = totalexporter + 1;
+        else
             if current(i) == 0
                 stopper = stopper + 1;
             end
         end
     end
     starterrate(j) = starter/totalnonexporter;
-    stopperrate(j) = stopper/totalexporter;
+    stopperrate(j) = stopper/(plants - totalnonexporter);
     last = current;      
 end
             
-
-% For starter and stopperrate equivalent to take total average
-averagestarter = mean(starterrate);
-averagestopper = mean(stopperrate);
+result(1) = mean(starterrate);
+result(2) = mean(stopperrate);
+toc
+disp(result);

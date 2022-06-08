@@ -1,4 +1,4 @@
-function Pi = profit(X, Qvalue, Evalue, theta, Cstar, alphan, alphak, w, r)
+function Pi = profit(X, Evalue, Qvalue, theta, Cstar, alphan, alphak, w, r)
 % Profit function for a plant in new exporter dynamics of Ruhl, Willis (2013)
 % X is the export decision. X = 0 and 1
 % Qvalue and Evalue are realizations of simulated AR(1) processes
@@ -8,18 +8,12 @@ function Pi = profit(X, Qvalue, Evalue, theta, Cstar, alphan, alphak, w, r)
 % w is wage, r is the rent price of capital 
 % State space is X, Epsilon and Q
 
+% Not fastest, but clear
 M = (1 + X * (Qvalue^theta) * Cstar)^(1/theta) * Evalue;
-n = (r/(M * (w * alphak/(r * alphan))^(alphak*(theta - 1)/theta - 1) * ...
-    alphak * (theta - 1) /theta))^(1/(alphan * (theta - 1)/theta + alphak * (theta - 1)/theta - 1));
-% or
-% n = (w * (w*alphak/(r * alphan))^(-alphak*(theta - 1)/theta) * ...
-%    theta/(alphan * M * (theta - 1))) ^ (theta/(alphan * (theta - 1) + alphak * (theta - 1) - theta))
-% or
-%n = ((r* alphan/(w*alphak))^(alphak*(theta - 1)/ theta) * w * theta/(alphan *...
-%    M * (theta - 1)))^(theta/((alphan + alphak) * (theta - 1) -theta));
-k = w * alphak * n/(r * alphan);
-
-Pi = M * n^(alphan * (theta - 1)/theta) * k^(alphak * (theta - 1)/theta) - w * n - r * k;
+%define two cobb douglas coefficients
+a = alphan * (theta - 1)/theta;
+b = alphak * (theta - 1)/theta;
+Pi = (1-a-b) * M^(1/(1-a-b)) * (a/w)^(a/(1-a-b)) * (b/r)^(b/(1-a-b));
 end
 
 

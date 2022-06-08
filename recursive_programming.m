@@ -1,4 +1,5 @@
 clear;
+rng(2); % Set random seed
 %==========================================================================
 % Initialization
 %==========================================================================
@@ -26,10 +27,6 @@ if parms==1
     %Set w so that median firm has 63 employees (nstable = 63)
     nstable = 63; % stable level of employment
     w = alphan *((theta-1)/theta) * nstable^(alphan *(theta-1)/theta-1); 
-    %w from paper
-        w = (((theta-1)/theta)*alphan * (r * alphan/alphak)^(alphak *...
-            (theta-1)/theta) * nstable^(((alphan + alphak)*(theta - 1) - ...
-            theta)/theta))^(theta/(theta + alphak* theta - alphak)); % w I derived
 elseif parms == 2
     % r is the average observed interest rate
     r = 0.109;
@@ -52,10 +49,7 @@ elseif parms == 2
     alphak = 0.55;
     %Set w so that median firm has 63 employees (nstable = 63)
     nstable = 63; % stable level of employment
-    %w = alphan *((theta-1)/theta) * nstable^(alphan *(theta-1)/theta-1);
-    w = (((theta-1)/theta)*alphan * (r * alphan/alphak)^(alphak *...
-        (theta-1)/theta) * nstable^(((alphan + alphak)*(theta - 1) - ...
-        theta)/theta))^(theta/(theta + alphak* theta - alphak));    
+    w = alphan *((theta-1)/theta) * nstable^(alphan *(theta-1)/theta-1);
 else
     r = input('r: ');
     Qrho = input('Qrho: ');
@@ -72,6 +66,7 @@ else
     w = alphan *((theta-1)/theta) * nstable^(alphan *(theta-1)/theta-1);
 end
 
+tic
 %==========================================================================
 % Preparations
 %==========================================================================
@@ -86,78 +81,83 @@ Xspace = [0, 1]; % Define state spaces for export choice
 [domestic_m,export_m] = sales(0, 1, 1, theta, Cstar, alphan, alphak, w, r);
 
 % Discretized AR(1) processes
+% Different Methodologies listed below:
 % [Estate, Eprob] = AR1discretize(EN,(-Eesigma^2/(2 * (1 - Erho^2))),Erho,Eesigma);
 % [Qstate, Qprob] = AR1discretize(QN,(-Qesigma^2/(2 * (1 - Qrho^2))),Qrho,Qesigma);
 
 % [Estate_or, Eprob] = AR1discretize(EN,0,Erho,Eesigma);
 % [Qstate_or, Qprob] = AR1discretize(QN,0,Qrho,Qesigma);
 
-[Estate_or, Eprob] = mytauchen(0, Erho,Eesigma, EN);
-[Qstate_or, Qprob] = mytauchen(0, Qrho,Qesigma, QN);
+%[Estate_or, Eprob] = mytauchen(0, Erho,Eesigma, EN);
+%[Qstate_or, Qprob] = mytauchen(0, Qrho,Qesigma, QN);
+
+[Estate_or, Eprob] = tauchen_quantecon(0, Erho,Eesigma, EN);
+[Qstate_or, Qprob] = tauchen_quantecon(0, Qrho,Qesigma, QN);
 
 % Note we have ln processes so we need to take exponentials of the processes
 Estate = exp(Estate_or);
 Qstate = exp(Qstate_or);
-% % create grids of the two random states
-% shockstate = [];
-% for j = 1:length(Estate)
-%     for k = 1:length(Qstate)
-%         shockstate((j-1) * length(Qstate) + k, 1) = Estate(j);
-%         shockstate((j-1) * length(Qstate) + k, 2) = Qstate(k);
-%     end
-% end
+
 % joint transition probability for the random states
 trans_joint = kron(Eprob, Qprob);
 
 % Initialize value for value functions
-V = [];
+State = []; % Stores states and profits of the states
 for i = 1:length(Xspace)
     for j = 1:length(Estate)
         for k = 1:length(Qstate)
             % iterate over all possible states
             % calculate profit in next period of exporting and not exporting
-            % make a guess on the value function with current profit
-            V = vertcat(V, [Xspace(i), Estate(j), Qstate(k), ...
-                profit(0, Qstate(k), Estate(j), theta, Cstar, alphan, alphak, w, r), ...
-                profit(1, Qstate(k), Estate(j), theta, Cstar, alphan, alphak, w, r) - expfixcost(Xspace(i), 1, parms) * domestic_m, ...
-                profit(0, Qstate(k), Estate(j), theta, Cstar, alphan, alphak, w, r), ...
-                0, 0, 0, 0]); % Pre-allocate some space
+            % make a guess on the value function with current profit (V(:,6))
+            State = [State; Xspace(i), Estate(j), Qstate(k), ...
+                profit(0, Estate(j), Qstate(k), theta, Cstar, alphan, alphak, w, r), ...
+                profit(1, Estate(j), Qstate(k), theta, Cstar, alphan, alphak, w, r) - expfixcost(Xspace(i), 1, parms) * domestic_m];
         end
     end
 end
+loops = length(Xspace) * length(Estate) * length(Qstate); % size of states
 
 %=========================================================================
 % Value function iteration
 % Here we need two values for choosing to or to not export
 %==========================================================================
-for t = 1:100
-    for j = 1:length(V)
-        % V(j, 4) is the profit without export calculated
-        % V(j, 5) is the profit with export calculated
-        % V(j, 6) is the value function from last iteration
-        % V(j, 7) is the new value function without export
-        % V(j, 8) is the new value function with export
-        % V(j, 9) is the policy function
-        % V(j, 10) is the maximized value function
-        if j <= length(V)/2
-            V(j, 7) = V(j, 4) + R * (trans_joint(j,:) * V(1:(length(V)/2), 6));
-            V(j, 8) = V(j, 5) + R * (trans_joint(j,:) * V((length(V)/2 + 1):length(V), 6));
-        else 
-            V(j, 7) = V(j, 4) + R * (trans_joint(j - length(V)/2,:) * V(1:(length(V)/2), 6));
-            V(j, 8) = V(j, 5) + R * (trans_joint(j - length(V)/2,:) * V((length(V)/2 + 1):length(V), 6));
-        end
-        % Determine policy function and maximize value function
-        if V(j, 7) > V(j, 8)
-            V(j, 9) = 0;
-            V(j, 10) = V(j, 7);
+iterate = 0;
+error = 1;
+V_EX = zeros(loops, 1); % Stores the value function for exporters
+V_NX = zeros(loops, 1); % Stores the value function for non-exporters
+Policy = zeros(loops, 1); % Store the policy function (0, 1)
+V_old = zeros(loops, 1); 
+V_old(:,1) = State(:, 4); % Take initial guess of the value function
+V_new = zeros(loops, 1); 
+while error > 1e-5
+    V_EX(1:loops/2) = State(1:(loops/2), 4) + R * (trans_joint * V_old(1:(loops/2)));
+    V_NX(1:loops/2) = State(1:(loops/2), 5) + R * (trans_joint * V_old((loops/2+1):end));
+    V_EX((loops/2 + 1):end) = State((loops/2 + 1):end, 4) + R * (trans_joint * V_old(1:(loops/2)));
+    V_NX((loops/2 + 1):end) = State((loops/2 + 1):end, 5) + R * (trans_joint * V_old((loops/2+1):end));
+    % Alternatively you can create a sparse diagonal matrix of trans_joint
+    % by blkdiag(trans_joint, trans_joint) and multiply in one go, the 
+    % method is slightly slower (2-second difference)
+    % So here I just assign the two halves seperately. 
+    % Determine policy function and maximize value function
+    for j = 1:loops
+        if V_EX(j) > V_NX(j)
+            Policy(j) = 0;
+            V_new(j) = V_EX(j);
         else
-            V(j, 9) = 1;
-            V(j, 10) = V(j, 8);
+            Policy(j) = 1;
+            V_new(j) = V_NX(j);
         end
-        V(j, 6) = V(j, 10); % update value function
+    end
+    error = max(abs(V_old - V_new));
+    V_old(:, 1) = V_new(:, 1); % update value function
+    iterate = iterate + 1;
+    if iterate > 2000
+        fprintf("Fail to converge in 2000 iterations")
+        break
     end
 end
-
+fprintf("Converged in %d iterations.\n", iterate);
+toc
 
 
 

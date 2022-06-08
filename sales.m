@@ -1,19 +1,12 @@
-function [domestic,export] = sales(X, Qvalue, Evalue, theta, Cstar, alphan, alphak, w, r)
+function [domestic,export] = sales(X, Evalue, Qvalue, theta, Cstar, alphan, alphak, w, r)
 % Domestic and export sales for firm decision
 
-% Why I create the function? 
-% Creating multiple outputs in the profit function force you to create many
-% extra variables to store the variables and main function will not be as aesthetic
-
+% Not fastest, but clear
 M = (1 + X * (Qvalue^theta) * Cstar)^(1/theta) * Evalue;
-n = (w * (w*alphak/(r * alphan))^(-alphak*(theta - 1)/theta) * ...
-   theta/(alphan * M * (theta - 1))) ^ (theta/(alphan * (theta - 1) + alphak * (theta - 1) - theta));
-
-k = w * alphak * n/(r * alphan);
-
-% Calculate domestic and foreign sales
-domestic = Evalue * ((1/(X * Qvalue^theta * Cstar + 1)) * n^alphan * k^alphak)^((theta - 1)/theta);
-export =  X * Qvalue * Evalue * Cstar^(1/theta) * ((Qvalue^theta * Cstar/(Qvalue^theta * Cstar + 1)) * n^alphan * k^alphak)^((theta - 1)/theta);
-
+%define two cobb douglas like coefficients
+a = alphan * (theta - 1)/theta;
+b = alphak * (theta - 1)/theta;
+Y = Evalue * M^((a + b)/(1-a-b)) * (a/w)^(a/(1-a-b)) * (b/r)^(b/(1-a-b));
+domestic = (1/(X*Qvalue^theta*Cstar + 1))^((theta - 1)/theta) * Y;
+export = X  * Qvalue * Cstar^(1/theta) * (1/(1 + Qvalue^(-theta)/Cstar))^((theta - 1)/theta) * Y;
 end
-
