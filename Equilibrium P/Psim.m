@@ -1,4 +1,4 @@
-function [P,Pstar, iterate, Ppath] = Psim(xi_E, xi_C, rho_EE, rho_CC, f_E, f_C, Erho,Eesigma, EN, Qrho,Qesigma, QN, theta, Cstar, alphan, alphak, w, r, tau)
+function [P,Pstar, iterate] = Psim(xi_E, xi_C, rho_EE, rho_CC, f_E, f_C, Erho,Eesigma, EN, Qrho,Qesigma, QN, theta, Cstar, alphan, alphak, w, r, tau)
 % Simulate for aggregate price level in domestic and foreign market
 % Iterate to find equilibrium prices
 
@@ -126,7 +126,7 @@ while error > 1e-5 && iterate < 100
 
     % first period
     for i = 1:plants
-        [domesticprice(i,1), foreignprice(i,1)] = price(0, 100, Esim(i, 1), ...
+        [domesticprice(i,1), foreignprice(i,1)] = price(0, 100, Esim(i, 1), Qsim(1),...
             theta, alphan, alphak, w, r, tau);
     end
     foreignprice = foreignprice(:,1) * Qsim(1);
@@ -137,11 +137,11 @@ while error > 1e-5 && iterate < 100
             X_sim(i, j) = V((V(:, 1) == Esim(i, j-1)) & (V(:, 2) == Qsim(j-1)) & ...
                 (V(:, 3) == last_X(i)) &  (V(:, 4) == last_xi(i)), 10);
             xi_sim(i, j) = icebergsim(X_sim(i, j), last_xi(i), xi_C, xi_E, rho_CC, rho_EE);
-            [domesticprice(i,j), foreignprice(i,j)] = price(X_sim(i, j), xi_sim(i, j), Esim(i, j), ...
+            [domesticprice(i,j), foreignprice(i,j)] = price(X_sim(i, j), xi_sim(i, j), Esim(i, j), Qsim(j), ...
                 theta, alphan, alphak, w, r, tau);
         end
         aggdoprice(j) = (sum(domesticprice(:,j).^(1-theta)))^(1/(1-theta));
-        aggfoprice(j) = (sum(nonzeros((foreignprice(:,j)) .* Qsim(j)).^(1-theta)))^(1/(1-theta));
+        aggfoprice(j) = (sum(nonzeros((foreignprice(:,j)) ./ Qsim(j)).^(1-theta)))^(1/(1-theta));
     end
     P = mean(aggdoprice((Tdrop+1):end));
     Pstar = mean(aggfoprice((Tdrop+1):end));
@@ -149,8 +149,7 @@ while error > 1e-5 && iterate < 100
     P_last = P;
     Pstar_last = Pstar;
     % update domestic_m (?)
-    % [domestic_m, ~] = sales(0, xi_E, 1, 1, theta, Cstar, alphan, alphak, w, r, 0, P, Pstar);
+    [domestic_m, ~] = sales(0, xi_E, 1, 1, theta, Cstar, alphan, alphak, w, r, 0, P, Pstar);
     iterate = iterate + 1;
 end
-Ppath = aggdoprice;
 end

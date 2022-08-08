@@ -25,17 +25,17 @@ if model==1
     rho_EE = 0.92;
     rho_CC = 0.92;
     % export fixed cost, f_E for new entry, f_C for continuing to export
-    f_E = 0.9;
+    f_E = 0.8;
     f_C = 0.2;
     % theta is the elasticity of substitution
     theta = 5;
     % Cstar is the size of world aggregate demand relative to domestic demand
-    Cstar = 0.146496;
+    Cstar = 0.9;
     % alphan and alphak are parameters of the Copp-Douglas production function
     alphan = 0.45;
     alphak = 0.55;
     % tau is ad-valorem tariff
-    tau = 0;
+    tau = 0.2;
     %Set w so that median firm has 63 employees (nstable = 63)
     nstable = 63; % stable level of employment
     w = alphan *((theta-1)/theta) * nstable^(alphan *(theta-1)/theta-1); 
@@ -55,7 +55,7 @@ elseif model == 2
     % theta is the elasticity of substitution
     theta = 7;
     % Cstar is the size of world aggregate demand relative to domestic demand
-    Cstar = 0.135;
+    Cstar = 0.8;
     % alphan and alphak are parameters of the Copp-Douglas production function
     alphan = 0.45;
     alphak = 0.55;
@@ -86,9 +86,18 @@ T = 100; % total time span to iterate over
 plants = 2000; % number of plants to simulate
 R = 1/(1 + r); % discount factor for value function
 
+%=========================================================================
+% P and P_star
+% find equilibrium aggregate price levels for both markets
+%==========================================================================
+[P,Pstar, iterate] = Psim(xi_E, xi_C, rho_EE, rho_CC, f_E, f_C, Erho,Eesigma, ...
+    EN, Qrho,Qesigma, QN, theta, Cstar, alphan, alphak, w, r, tau);
+toc
+
+tic
 % sales of a nonexporting median plant
 % domestic_m will be used to calculate fixed cost
-[domestic_m,export_m] = sales(0, xi_E, 1, 1, theta, Cstar, alphan, alphak, w, r, 0, 1, 1);
+[domestic_m,export_m] = sales(0, xi_E, 1, 1, theta, Cstar, alphan, alphak, w, r, 0, P, Pstar);
 
 % Discretized AR(1) processes
 [Estate_or, Eprob] = tauchen_quantecon(0, Erho,Eesigma, EN);
@@ -110,15 +119,6 @@ for j = 1:length(Estate)
     end
 end
 
-%=========================================================================
-% P and P_star
-% find equilibrium aggregate price levels for both markets
-%==========================================================================
-[P,Pstar, iterate, Ppath] = Psim(xi_E, xi_C, rho_EE, rho_CC, f_E, f_C, Erho,Eesigma, ...
-    EN, Qrho,Qesigma, QN, theta, Cstar, alphan, alphak, w, r, tau);
-toc
-
-tic
 % Initialize value functions
 % calculate profit in next period with different export states
 V_NX = States; % Nonexporter
@@ -165,7 +165,6 @@ V_CX(:,8:11) = 0;
 % V(j, 11) is the maximized value function
 %==========================================================================
 V = VFI_baseline(V_NX, V_EX, V_CX, rho_EE, rho_CC, trans_joint, R);
-toc
 
 %==========================================================================
 % Simulation
@@ -173,9 +172,8 @@ toc
 % We have 1914 plants and 400 periods
 % Note we have to annualize the results (taking average for each year)
 % E vary for each plant and Q is identical for all plants
-tic
 rng(2); % Set random seed
-result = zeros(6, 1); 
+result = zeros(7, 1); 
 Esim = [];
 for i = 1:plants
     E = AR1sim(T, Estate, Eprob);
@@ -210,7 +208,7 @@ exportershare = zeros(T, 1);
 for i = 1:plants
     [domestic(i, 1),export(i, 1)] = sales(0, 100, Esim(i, 1), Qsim(1), ...
              theta, Cstar, alphan, alphak, w, r, tau, P, Pstar);
-    [domesticprice(i,1), foreignprice(i,1)] = price(0, 100, Esim(i, 1),  ...
+    [domesticprice(i,1), foreignprice(i,1)] = price(0, 100, Esim(i, 1), Qsim(1), ...
             theta, alphan, alphak, w, r, tau);
 end
 
@@ -226,7 +224,7 @@ for j = 2:T
         [domestic(i, j),export(i, j)] = sales(X_sim(i, j), xi_sim(i, j), Esim(i, j), Qsim(j), ...
              theta, Cstar, alphan, alphak, w, r, tau, P, Pstar);
         exportsales(i, j) = export(i, j)/(domestic(i, j) + export(i, j));
-        [domesticprice(i,j), foreignprice(i,j)] = price(X_sim(i, j), xi_sim(i, j), Esim(i, j), ...
+        [domesticprice(i,j), foreignprice(i,j)] = price(X_sim(i, j), xi_sim(i, j), Esim(i, j), Qsim(j),...
             theta, alphan, alphak, w, r, tau);
         if (last_X(i) == 0) && (X_sim(i, j) == 1)
                 starter = starter + 1;
@@ -255,6 +253,7 @@ result(3) = mean(exportsales(exportsales > 0));
 result(4) = mean(churning(2:end), 'omitnan');
 result(5) = mean(exportershare(2:end));
 result(6) = mean(avgforeignprice./avgdomesticprice, 'omitnan');
+result(7) = mean(Pstar/P); % aggregate price level
 
 toc
 disp(result);

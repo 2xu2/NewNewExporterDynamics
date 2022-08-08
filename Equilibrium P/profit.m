@@ -12,7 +12,7 @@ function [Pi] = profit(X, xi, Evalue, Qvalue, theta, Cstar, alphan, alphak, w, r
 % tau is the ad-valorem tariff rate
 
 % Not fastest, but clear
-M = (1 + X * xi^(1 - theta) * Cstar  * (1 - tau)^theta .* (Qvalue.*(Pstar/P)).^theta).^(1/theta) .* Evalue;
+M = (1 + X * xi^(1 - theta) * Cstar  * (1 - tau)^theta * ((Qvalue.*(Pstar/P)).^theta)).^(1/theta) .* P .* Evalue;
 %define two cobb douglas coefficients
 a = alphan * (theta - 1)/theta;
 b = alphak * (theta - 1)/theta;
